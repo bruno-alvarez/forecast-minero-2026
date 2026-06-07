@@ -123,16 +123,21 @@ try:
 
         st.write("---")
 
-        # 9. GRÁFICO CORPORATIVO NATIVO: BARRAS SEPARADAS (stack=False)
+        # 9. GRÁFICO CORPORATIVO NATIVO CON ORDEN CRONOLÓGICO ESTRICTO
         st.subheader("📊 Análisis de Desviaciones: Budget vs Forecast (2do Semestre 2026)")
         
         # Estructuramos los datos en millones de dólares para simplificar la lectura
         df_grafico_nativo = pd.DataFrame({
             'Budget (Presupuesto Base)': [b / 1_000_000 for b in totales_budget_base],
             'Forecast (Proyección Ajustada)': [f / 1_000_000 for f in totales_forecast_mes]
-        }, index=[m.split('-')[0] for m in meses_proyeccion]) # Muestra Jun, Jul, Aug...
+        }, index=[m.split('-')[0] for m in meses_proyeccion]) # Índices cortados: Jun, Jul, Aug...
         
-        # El parámetro stack=False separa las barras y las coloca lado a lado de forma nativa
+        # CORRECCIÓN DE ORDEN: Convertimos el índice en una categoría ordenada de forma explícita
+        orden_cronologico = ['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        df_grafico_nativo.index = pd.CategoricalIndex(df_grafico_nativo.index, categories=orden_cronologico, ordered=True)
+        df_grafico_nativo = df_grafico_nativo.sort_index()
+        
+        # Despliegue de barras laterales ordenadas cronológicamente
         st.bar_chart(df_grafico_nativo, y_label="Millones de USD (M$)", use_container_width=True, stack=False)
 
         # 10. TABLA COMPRENSIVA EN PANTALLA
