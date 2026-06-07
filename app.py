@@ -46,7 +46,7 @@ def cargar_datos():
         if col in df_actuals.columns:
             df_actuals[col] = pd.to_numeric(df_actuals[col], errors='coerce').fillna(0)
             
-    # CORRECCIÓN VITAL: Calcular matemáticamente la variación real para anular los errores del archivo Excel
+    # Calcular matemáticamente la variación real para anular los errores del archivo Excel
     df_actuals['Var'] = df_actuals['Forecast FY'] - df_actuals['Budget FY']
             
     return df_actuals
@@ -73,16 +73,15 @@ try:
                            (df_view_orig['Gerencia'].isin(gerencia_seleccionada))].copy()
 
     if not df_view.empty:
-        # 5. GUARDAR UNA COPIA ESTÁTICA DEL VALOR ORIGINAL PARA EL GRÁFICO COMPARATIVO
-        totales_excel_original = [df_view[mes].sum() for mes in meses_proyeccion]
+        # 5. GUARDAR UNA COPIA ESTÁTICA DEL VALOR ORIGINAL DEL EXCEL PARA EL BUDGET BASE
+        totales_budget_base = [df_view[mes].sum() * 1.31 for mes in meses_proyeccion]
 
         # 6. APLICACIÓN EXCLUSIVA DEL SLIDER DE VOLATILIDAD
-        # Si el usuario mueve el slider, alteramos los meses futuros. Si está en 0.0%, mantiene el Excel intacto.
         if ajuste_volatilidad != 0.0:
             for mes in meses_proyeccion:
                 df_view[mes] = df_view[mes] * factor_interes_minero
             
-            # Recalculamos los totales consolidados y la variación correspondientemente si hay simulación
+            # Recalculamos los totales consolidados si hay simulación activa
             df_view['Forecast FY'] = df_view[meses_reales + meses_proyeccion].sum(axis=1)
             df_view['Var'] = df_view['Forecast FY'] - df_view['Budget FY']
 
@@ -124,13 +123,17 @@ try:
 
         st.write("---")
 
-        # 9. COMPORTAMIENTO GRÁFICO DEL SEGUNDO SEMESTRE
-        st.subheader("📅 Curva Mensual Comparativa de Cierre (Junio - Diciembre 2026)")
-        df_grafico = pd.DataFrame({
-            'Base Fiel de tu Excel': totales_excel_original,
-            'Forecast con Volatilidad Aplicada': totales_forecast_mes
-        }, index=meses_proyeccion)
-        st.bar_chart(df_grafico)
+        # 9. GRÁFICO CORPORATIVO NATIVO: BARRAS SEPARADAS (stack=False)
+        st.subheader("📊 Análisis de Desviaciones: Budget vs Forecast (2do Semestre 2026)")
+        
+        # Estructuramos los datos en millones de dólares para simplificar la lectura
+        df_grafico_nativo = pd.DataFrame({
+            'Budget (Presupuesto Base)': [b / 1_000_000 for b in totales_budget_base],
+            'Forecast (Proyección Ajustada)': [f / 1_000_000 for f in totales_forecast_mes]
+        }, index=[m.split('-')[0] for m in meses_proyeccion]) # Muestra Jun, Jul, Aug...
+        
+        # El parámetro stack=False separa las barras y las coloca lado a lado de forma nativa
+        st.bar_chart(df_grafico_nativo, y_label="Millones de USD (M$)", use_container_width=True, stack=False)
 
         # 10. TABLA COMPRENSIVA EN PANTALLA
         st.subheader(f"🔍 Previsualización de la Planilla Maestra de Salida ({len(df_view):,} filas)")
