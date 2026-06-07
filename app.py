@@ -1,80 +1,143 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import io
 
-# 1. Configuración de la página
-st.set_page_config(page_title="App Minera Pro 2026", layout="wide", initial_sidebar_state="expanded")
-st.title("🚀 Dashboard Avanzado: Forecast 5+7 (2026)")
-st.markdown("### Modelo de Proyección No Lineal por Naturaleza de Gasto")
+# 1. Configuración de la interfaz profesional corporativa
+st.set_page_config(page_title="Mining Control - Dashboard Oficial", layout="wide", initial_sidebar_state="expanded")
+st.title("📊 Dashboard Corporativo Minero: Forecast 5+7")
+st.markdown("### Proyección Estabilizada Nativa (Sincronización Exacta con Excel)")
 
-# 2. Carga de datos
+# 2. BARRA LATERAL: Controles de Estabilización y Mercado
+st.sidebar.header("⚙️ Simulación de Volatilidad Operacional")
+ajuste_volatilidad = st.sidebar.slider(
+    "Ajuste por Volatilidad de Insumos Críticos (%)", 
+    min_value=-20.0, 
+    max_value=20.0, 
+    value=0.0, 
+    step=0.5,
+    help="Simula alzas de precios de mercado (diésel, energía) o variaciones de ley/dureza para el segundo semestre."
+)
+factor_interes_minero = 1.0 + (ajuste_volatilidad / 100.0)
+
+# 3. MOTOR DE CARGA DIRECTA DESDE EXCEL
 @st.cache_data
-def load_data():
-    return pd.read_excel('Datos Proyecto Mejora  2026.xlsx', sheet_name='Forecast 5+7', header=1)
+def cargar_datos():
+    archivo = "Datos Proyecto Mejora  2026 (1).xlsx"
+    
+    # Leer la hoja Forecast 5+7 exactamente como está en tu Excel
+    df_actuals = pd.read_excel(archivo, sheet_name="Forecast 5+7", header=1)
+    
+    # Normalizar códigos contables para asegurar consistencia
+    for col in ['Resp', 'Proc', 'Item', 'CC']:
+        if col in df_actuals.columns:
+            df_actuals[col] = df_actuals[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+            
+    for col in ['VP', 'Gerencia', 'Classif']:
+        if col in df_actuals.columns:
+            df_actuals[col] = df_actuals[col].astype(str).str.strip()
+            
+    # Forzar que todas las columnas numéricas mantengan el tipo de dato correcto
+    columnas_numericas = ['Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26', 'Jun-26', 
+                         'Jul-26', 'Aug-26', 'Sep-26', 'Oct-26', 'Nov-26', 'Dec-26', 
+                         'YTD', 'Forecast FY', 'Budget FY', 'BYTD', 'Forecast Actual']
+    
+    for col in columnas_numericas:
+        if col in df_actuals.columns:
+            df_actuals[col] = pd.to_numeric(df_actuals[col], errors='coerce').fillna(0)
+            
+    # CORRECCIÓN VITAL: Calcular matemáticamente la variación real para anular los errores del archivo Excel
+    df_actuals['Var'] = df_actuals['Forecast FY'] - df_actuals['Budget FY']
+            
+    return df_actuals
 
 try:
-    df = load_data()
+    df_view_orig = cargar_datos()
     
-    # 3. Variables de tiempo
-    actual_cols = ['Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26']
-    forecast_cols = ['Jun-26', 'Jul-26', 'Aug-26', 'Sep-26', 'Oct-26', 'Nov-26', 'Dec-26']
+    # Horizontes temporales para el control del simulador
+    meses_reales = ['Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26']
+    meses_proyeccion = ['Jun-26', 'Jul-26', 'Aug-26', 'Sep-26', 'Oct-26', 'Nov-26', 'Dec-26']
     
-    # 4. BARRA LATERAL: Filtros
-    st.sidebar.header("🎯 Filtros de Operación")
-    todas_vp = df['VP'].dropna().unique().tolist()
-    vp_seleccionadas = st.sidebar.multiselect("1. Seleccione VP(s)", todas_vp, default=todas_vp)
+    # 4. FILTROS EN CASCADA CORPORATIVOS
+    st.sidebar.write("---")
+    st.sidebar.header("🔍 Filtros Organizacionales")
     
-    gerencias_disp = df[df['VP'].isin(vp_seleccionadas)]['Gerencia'].dropna().unique().tolist()
-    gerencia_seleccionada = st.sidebar.multiselect("2. Seleccione Gerencia(s)", gerencias_disp, default=gerencias_disp)
+    vps_unicas = sorted([str(v) for v in df_view_orig['VP'].unique() if str(v).lower() != 'nan' and str(v) != ''])
+    vp_seleccionadas = st.sidebar.multiselect("1. Seleccionar Vicepresidencia(s) (VP)", vps_unicas, default=vps_unicas)
     
-    clases_disp = df[(df['VP'].isin(vp_seleccionadas)) & (df['Gerencia'].isin(gerencia_seleccionada))]['Classif'].dropna().unique().tolist()
-    clase_seleccionada = st.sidebar.multiselect("3. Naturaleza del Gasto", clases_disp, default=clases_disp)
+    df_filtrado_vp = df_view_orig[df_view_orig['VP'].isin(vp_seleccionadas)]
+    gerencias_unicas = sorted([str(g) for g in df_filtrado_vp['Gerencia'].unique() if str(g).lower() != 'nan' and str(g) != ''])
+    gerencia_seleccionada = st.sidebar.multiselect("2. Seleccionar Gerencia(s)", gerencias_unicas, default=gerencias_unicas)
+    
+    df_view = df_view_orig[(df_view_orig['VP'].isin(vp_seleccionadas)) & 
+                           (df_view_orig['Gerencia'].isin(gerencia_seleccionada))].copy()
 
-    # 5. Ajuste No Lineal
-    st.sidebar.markdown("---")
-    st.sidebar.header("📈 Ajuste No Lineal")
-    tasas_crecimiento = {clase: st.sidebar.slider(f"Crecimiento - {clase} (%)", -10.0, 10.0, 0.0, 0.5) for clase in clase_seleccionada}
+    if not df_view.empty:
+        # 5. GUARDAR UNA COPIA ESTÁTICA DEL VALOR ORIGINAL PARA EL GRÁFICO COMPARATIVO
+        totales_excel_original = [df_view[mes].sum() for mes in meses_proyeccion]
 
-    # 6. Cálculo del Modelo
-    df_filtrado = df[(df['VP'].isin(vp_seleccionadas)) & 
-                     (df['Gerencia'].isin(gerencia_seleccionada)) & 
-                     (df['Classif'].isin(clase_seleccionada))].copy()
+        # 6. APLICACIÓN EXCLUSIVA DEL SLIDER DE VOLATILIDAD
+        # Si el usuario mueve el slider, alteramos los meses futuros. Si está en 0.0%, mantiene el Excel intacto.
+        if ajuste_volatilidad != 0.0:
+            for mes in meses_proyeccion:
+                df_view[mes] = df_view[mes] * factor_interes_minero
+            
+            # Recalculamos los totales consolidados y la variación correspondientemente si hay simulación
+            df_view['Forecast FY'] = df_view[meses_reales + meses_proyeccion].sum(axis=1)
+            df_view['Var'] = df_view['Forecast FY'] - df_view['Budget FY']
 
-    if not df_filtrado.empty:
-        # Lógica de proyección
-        df_filtrado['Suma_Actuals_5M'] = df_filtrado[actual_cols].sum(axis=1)
-        for clase in clase_seleccionada:
-            tasa = tasas_crecimiento[clase] / 100.0
-            mask = df_filtrado['Classif'] == clase
-            base_gasto = df_filtrado.loc[mask, 'May-26']
-            for i, mes in enumerate(forecast_cols, start=1):
-                df_filtrado.loc[mask, mes + '_Proyectado'] = base_gasto * ((1 + tasa) ** i)
+        totales_forecast_mes = [df_view[mes].sum() for mes in meses_proyeccion]
+
+        # ORDENAMIENTO ESTRICTO DE COLUMNAS IDÉNTICO A TU EXCEL
+        orden_columnas_original = ['Resp', 'Desc Resp', 'VP', 'Gerencia', 'Proc', 'Desc Proc', 'Item', 'Desc Item', 
+                                   'Classif', 'CC', 'Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26', 'Jun-26', 
+                                   'Jul-26', 'Aug-26', 'Sep-26', 'Oct-26', 'Nov-26', 'Dec-26', 'YTD', 'Forecast FY', 
+                                   'Budget FY', 'Var', 'BYTD', 'Forecast Actual']
         
-        forecast_proyectados = [m + '_Proyectado' for m in forecast_cols]
-        df_filtrado['Nuevo_Forecast_FY'] = df_filtrado['Suma_Actuals_5M'] + df_filtrado[forecast_proyectados].sum(axis=1)
+        orden_columnas_existentes = [col for col in orden_columnas_original if col in df_view.columns]
+
+        # 7. EXPORTACIÓN INTELIGENTE DE LA PLANILLA MAESTRA EN EXCEL NATIVO
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df_view[orden_columnas_existentes].to_excel(writer, index=False, sheet_name='Forecast 5+7 Proyectado')
+        bytes_excel = buffer.getvalue()
         
-        # 7. INTERFAZ: KPIs
+        st.sidebar.write("---")
+        st.sidebar.header("💾 Exportar Data")
+        st.sidebar.download_button(label="📥 Descargar Planilla Maestra (.xlsx)", data=bytes_excel,
+                                   file_name=f"Forecast_5mas7_Fiel.xlsx",
+                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+        # 8. DESPLIEGUE DE INDICADORES EN PANTALLA
+        budget_total = df_view['Budget FY'].sum()
+        forecast_total = df_view['Forecast FY'].sum()
+        desviacion_total = df_view['Var'].sum()
+        porcentaje_desvio = (desviacion_total / budget_total) * 100 if budget_total > 0 else 0.0
+
         col1, col2, col3 = st.columns(3)
-        col1.metric("Presupuesto (FY)", f"${df_filtrado['Budget FY'].sum():,.0f}")
-        col2.metric("Proyección (FY)", f"${df_filtrado['Nuevo_Forecast_FY'].sum():,.0f}")
-        col3.metric("Varianza", f"${df_filtrado['Budget FY'].sum() - df_filtrado['Nuevo_Forecast_FY'].sum():,.0f}")
+        with col1:
+            st.metric("💰 Presupuesto Inicial Base (Budget FY)", f"USD {budget_total:,.2f}")
+        with col2:
+            st.metric("📈 Forecast FY en Pantalla", f"USD {forecast_total:,.2f}")
+        with col3:
+            st.metric("⚠️ Desviación Total (Var)", f"USD {desviacion_total:,.2f}", f"{porcentaje_desvio:.2f}%", delta_color="inverse")
 
-        # 8. GRÁFICO 1: Evolución Mensual
-        st.subheader("📈 Evolución Mensual del Gasto")
-        gasto_mensual = df_filtrado[actual_cols + forecast_proyectados].sum().values
-        df_grafico = pd.DataFrame({'Mes': actual_cols + forecast_cols, 'Gasto USD': gasto_mensual})
-        st.line_chart(df_grafico.set_index('Mes'))
+        st.write("---")
 
-        # 9. GRÁFICO 2: Consolidado por Naturaleza
-        st.markdown("---")
-        st.subheader("📊 Proyección Consolidada por Clasificación")
-        df_resumen = df_filtrado.groupby('Classif')[['Nuevo_Forecast_FY']].sum().reset_index()
-        st.bar_chart(df_resumen.set_index('Classif')[['Nuevo_Forecast_FY']])
-        
-        st.info("Este modelo calcula el cierre de año aplicando una curva exponencial de crecimiento según tus ajustes.")
+        # 9. COMPORTAMIENTO GRÁFICO DEL SEGUNDO SEMESTRE
+        st.subheader("📅 Curva Mensual Comparativa de Cierre (Junio - Diciembre 2026)")
+        df_grafico = pd.DataFrame({
+            'Base Fiel de tu Excel': totales_excel_original,
+            'Forecast con Volatilidad Aplicada': totales_forecast_mes
+        }, index=meses_proyeccion)
+        st.bar_chart(df_grafico)
+
+        # 10. TABLA COMPRENSIVA EN PANTALLA
+        st.subheader(f"🔍 Previsualización de la Planilla Maestra de Salida ({len(df_view):,} filas)")
+        st.dataframe(df_view[orden_columnas_existentes])
 
     else:
         st.warning("⚠️ No hay datos para los filtros seleccionados.")
 
 except Exception as e:
-    st.error(f"Error técnico: {e}")
+    st.error(f"❌ Ocurrió un error al procesar el tablero: {e}")
